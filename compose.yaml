@@ -1,0 +1,27 @@
+services:
+  fastapi:
+    container_name: fastapi
+    build:
+      context: .
+      dockerfile: fastapi.Dockerfile
+    environment:
+      NO_DON_ENV: true
+      DATABASE_URL: postgres://user:password@postgres:5432/postgres
+      HOST: 0.0.0.0
+      PORT: 8080
+      ADMIN_SECRET: secret
+    ports:
+      - "8080:8080"
+  postgres:
+    container_name: postgres
+    build:
+      context: .
+      dockerfile: postgres.Dockerfile
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    expose:
+      - 5432
