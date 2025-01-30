@@ -2,7 +2,6 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$USER_HOME$/PycharmProjects/ProdMan/.idea/ProdMan.iml" filepath="$USER_HOME$/PycharmProjects/ProdMan/.idea/ProdMan.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/Prodhub.iml" filepath="$PROJECT_DIR$/.idea/Prodhub.iml" />
     </modules>
   </component>
