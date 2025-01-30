@@ -3,7 +3,6 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from psycopg.errors import UniqueViolation
 from psycopg.rows import class_row
-from watchfiles import awatch
 
 from app.database import Database
 from app.schemas import (
@@ -79,7 +78,7 @@ async def get_event(event_id: int, conn: Database):
 
 @events_router.post(
     "/",
-    response_model=ProductSchema,
+    response_model=EventSchema,
     status_code=status.HTTP_201_CREATED,
     responses={
         status.HTTP_409_CONFLICT: error_response(
@@ -88,7 +87,7 @@ async def get_event(event_id: int, conn: Database):
     },
 )
 async def create_event(body: CreateEventSchema, conn: Database):
-    async with conn.cursor(row_factory=class_row(ProductSchema)) as cur:
+    async with conn.cursor(row_factory=class_row(EventSchema)) as cur:
         try:
             await cur.execute(
                 """insert into events (name, start, finish)

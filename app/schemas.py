@@ -68,9 +68,10 @@ class EventSchema(BaseModel):
 
 
 def check_end_not_before_start(end: datetime, info: ValidationInfo) -> datetime:
-    if end and info.data["start"] and end > info.data["start"]:
-        raise ValueError("End time cannot be before start time")
-    return end
+    if "start" in info.data:
+        if end and info.data["start"] and end < info.data["start"]:
+            raise ValueError("End time cannot be before start time")
+        return end
 
 
 class EventQuery(BaseModel):
