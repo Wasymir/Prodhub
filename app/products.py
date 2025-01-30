@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from psycopg.errors import UniqueViolation, IntegrityError
 from psycopg.rows import class_row, dict_row
 
+import app.categories
 from app.database import Database
 from app.schemas import (
     ProductSchema,
@@ -14,11 +15,30 @@ from app.schemas import (
     CategorySchema,
     UpdateProductSchema,
 )
-from app.user import get_user_bearer
+from app.user import get_user_bearer, auth_resp
+from app.utils import error_response, get_responses
 
 products_router = APIRouter(
     prefix="/products", dependencies=[Depends(get_user_bearer)], tags=["Products"]
 )
+
+not_found_resp = {
+    status.HTTP_404_NOT_FOUND: error_response(
+        "Product with such id does not exist.", ["Such product does not exist"]
+    )
+}
+
+unique_violation_resp = {
+    status.HTTP_409_CONFLICT: error_response(
+        "Product with such name already exists.", ["Such product already exists"]
+    )
+}
+
+invalid_image_resp = {
+    status.HTTP_415_UNSUPPORTED_MEDIA_TYPE: error_response(
+        "Invalid image data.", ["Unable to determine image format"]
+    )
+}
 
 
 @products_router.get(
@@ -49,7 +69,13 @@ async def get_all_products(conn: Database):
 
 
 @products_router.get(
-    "/{product_id}", response_model=ProductSchema, status_code=status.HTTP_200_OK
+    "/{product_id}",
+    response_model=ProductSchema,
+    status_code=status.HTTP_200_OK,
+    responses={
+        **auth_resp,
+        **not_found_resp,
+    },
 )
 async def get_product(product_id: int, conn: Database):
     async with conn.cursor(row_factory=class_row(ProductSchema)) as cur:
@@ -78,14 +104,21 @@ async def get_product(product_id: int, conn: Database):
         if cur.rowcount == 0:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Such Product Does not Exist",
+                detail="Such product does not exist",
             )
         product = await cur.fetchone()
     return product
 
 
 @products_router.post(
-    "/", response_model=ProductSchema, status_code=status.HTTP_201_CREATED
+    "/",
+    response_model=ProductSchema,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        **auth_resp,
+        **unique_violation_resp,
+        **app.categories.not_found_resp,
+    },
 )
 async def create_product(body: CreateProductSchema, conn: Database):
     async with conn.cursor(row_factory=dict_row) as cur:
@@ -113,12 +146,12 @@ async def create_product(body: CreateProductSchema, conn: Database):
         except UniqueViolation:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Such Product Already Exists",
+                detail="Such product already exists",
             )
         except IntegrityError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Such Category Does not Exist",
+                detail="Such category does not exist",
             )
 
     return product
@@ -127,6 +160,10 @@ async def create_product(body: CreateProductSchema, conn: Database):
 @products_router.delete(
     "/{product_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        **auth_resp,
+        **not_found_resp,
+    },
 )
 async def delete_product(product_id: int, conn: Database):
     async with conn.cursor() as cur:
@@ -134,7 +171,7 @@ async def delete_product(product_id: int, conn: Database):
         if cur.rowcount == 0:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Such Product Does not Exist",
+                detail="Such product does not exist",
             )
     image = Path("static", f"{product_id}.png")
     if image.exists():
@@ -142,7 +179,17 @@ async def delete_product(product_id: int, conn: Database):
 
 
 @products_router.patch(
-    "/{product_id}", response_model=ProductSchema, status_code=status.HTTP_200_OK
+    "/{product_id}",
+    response_model=ProductSchema,
+    status_code=status.HTTP_200_OK,
+    responses={
+        **auth_resp,
+        **unique_violation_resp,
+        status.HTTP_404_NOT_FOUND: error_response(
+            "Either product or category with such id does not exist.",
+            ["Such product does not exist", "Such category does not exist"],
+        ),
+    },
 )
 async def update_product(body: UpdateProductSchema, product_id: int, conn: Database):
     async with conn.cursor() as cur:
@@ -158,13 +205,13 @@ async def update_product(body: UpdateProductSchema, product_id: int, conn: Datab
         except UniqueViolation:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Such Product Already Exists",
+                detail="Such product already exists",
             )
 
         if cur.rowcount == 0:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Such Product Does not Exist",
+                detail="Such product does not exist",
             )
 
         if body.categories is None:
@@ -186,12 +233,12 @@ async def update_product(body: UpdateProductSchema, product_id: int, conn: Datab
                 case "product_id":
                     raise HTTPException(
                         status_code=status.HTTP_404_NOT_FOUND,
-                        detail="Such Product Does not Exist",
+                        detail="Such product does not exist",
                     )
                 case "category_id":
                     raise HTTPException(
                         status_code=status.HTTP_404_NOT_FOUND,
-                        detail="Such Category Does not Exist",
+                        detail="Such category does not exist",
                     )
 
     return await get_product(product_id, conn)
@@ -201,6 +248,11 @@ async def update_product(body: UpdateProductSchema, product_id: int, conn: Datab
     "{product_id}/image",
     response_model=ProductSchema,
     status_code=status.HTTP_201_CREATED,
+    responses={
+        **auth_resp,
+        **not_found_resp,
+        **invalid_image_resp,
+    },
 )
 async def create_product_image(product_id: int, file: UploadFile, conn: Database):
     async with conn.cursor() as cur:
@@ -214,7 +266,7 @@ async def create_product_image(product_id: int, file: UploadFile, conn: Database
         if cur.rowcount == 0:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Such Product Does not Exist",
+                detail="Such product does not exist",
             )
         try:
             contests = await file.read()
@@ -223,7 +275,7 @@ async def create_product_image(product_id: int, file: UploadFile, conn: Database
         except UnidentifiedImageError:
             raise HTTPException(
                 status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-                detail="Unable to determine file type",
+                detail="Unable to determine image type",
             )
     return await get_product(product_id, conn)
 
@@ -231,6 +283,13 @@ async def create_product_image(product_id: int, file: UploadFile, conn: Database
 @products_router.delete(
     "/{product_id}/image",
     status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        **auth_resp,
+        status.HTTP_404_NOT_FOUND: error_response(
+            "There isn't an image associated with such product id.",
+            ["Such image does not exist"],
+        ),
+    },
 )
 async def delete_product_image(product_id: int, conn: Database):
     async with conn.cursor() as cur:
@@ -244,12 +303,15 @@ async def delete_product_image(product_id: int, conn: Database):
         else:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Such Image Does not Exist",
+                detail="Such image does not exist",
             )
 
 
 @products_router.patch(
-    "/{product_id}/image", response_model=ProductSchema, status_code=status.HTTP_200_OK
+    "/{product_id}/image",
+    response_model=ProductSchema,
+    status_code=status.HTTP_200_OK,
+    description="A wrapper around other product image related endpoints. Expect the same return codes as in them.",
 )
 async def update_product_image(
     product_id: int, conn: Database, file: UploadFile | None = None

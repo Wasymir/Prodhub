@@ -15,7 +15,7 @@ from psycopg.rows import class_row
 
 from app.database import Database
 from app.schemas import UserSchema, TokenSchema, UserWithTokenSchema
-from app.utils import hash_password
+from app.utils import hash_password, error_response
 
 user_router = APIRouter(prefix="/user", tags=["User Utils"])
 
@@ -34,14 +34,14 @@ async def get_user_basic(
         if cur.rowcount == 0:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid Username or Password",
+                detail="Invalid username or password",
             )
         user_id, password, salt = (await cur.fetchone())[0]
         digest, _ = hash_password(credentials.password, salt)
         if not secrets.compare_digest(digest, password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid Username or Password",
+                detail="Invalid username or password",
             )
 
         return UserSchema(user_id=user_id, username=credentials.username)
@@ -50,15 +50,29 @@ async def get_user_basic(
 GetUserBasic = Annotated[UserSchema, Depends(get_user_basic)]
 
 
-@user_router.post("/login", response_model=TokenSchema, status_code=HTTPStatus.CREATED)
+@user_router.post(
+    "/login",
+    response_model=TokenSchema,
+    status_code=HTTPStatus.CREATED,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: error_response(
+            "Invalid username or password.", ["Invalid username or password"]
+        ),
+        status.HTTP_403_FORBIDDEN: error_response(
+            "Exceeded the number of issued token. Logout other tokens to be able to issue new ones.",
+            ["Token limit exceeded"],
+        ),
+    },
+)
 async def login_user(user: GetUserBasic, conn: Database):
     async with conn.cursor() as cur:
         await cur.execute(
-            "select count(*) from tokens where user_id = %s", (user.user_id,)
+            "select count(*) from tokens where user_id = %s and expires > now()",
+            (user.user_id,),
         )
         if (await cur.fetchone())[0] > 5:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Token Limit Exceeded"
+                status_code=status.HTTP_403_FORBIDDEN, detail="Token limit exceeded"
             )
 
         cur.row_factory = class_row(TokenSchema)
@@ -95,7 +109,7 @@ async def get_user_bearer(
         )
         if cur.rowcount == 0:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Invalid Token"
+                status_code=status.HTTP_403_FORBIDDEN, detail="Invalid token"
             )
         user = await cur.fetchone()
     return user
@@ -103,21 +117,34 @@ async def get_user_bearer(
 
 GetUserBearer = Annotated[UserWithTokenSchema, Depends(get_user_bearer)]
 
+auth_resp = {
+    status.HTTP_403_FORBIDDEN: error_response(
+        "Invalid or expired token.", ["Invalid token"]
+    )
+}
+
 
 @user_router.get(
-    "/", response_model=UserWithTokenSchema, status_code=status.HTTP_200_OK
+    "/",
+    response_model=UserWithTokenSchema,
+    status_code=status.HTTP_200_OK,
+    responses=auth_resp,
 )
 async def get_user(user: GetUserBearer):
     return user
 
 
-@user_router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@user_router.post(
+    "/logout", status_code=status.HTTP_204_NO_CONTENT, responses=auth_resp
+)
 async def logout(user: GetUserBearer, conn: Database):
     async with conn.cursor() as cur:
         await cur.execute("delete from tokens where value = %s", (user.value,))
 
 
-@user_router.post("/logout-all", status_code=status.HTTP_204_NO_CONTENT)
+@user_router.post(
+    "/logout-all", status_code=status.HTTP_204_NO_CONTENT, responses=auth_resp
+)
 async def logout_all(user: GetUserBearer, conn: Database):
     async with conn.cursor() as cur:
         await cur.execute("delete from tokens where user_id = %s", (user.user_id,))

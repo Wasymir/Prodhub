@@ -2,6 +2,8 @@ import logging
 import secrets
 from hashlib import pbkdf2_hmac
 
+from fastapi import APIRouter
+
 logger = logging.getLogger("uvicorn.error")
 
 

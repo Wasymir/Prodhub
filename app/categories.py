@@ -4,15 +4,31 @@ from psycopg.rows import class_row
 
 from app.database import Database
 from app.schemas import CategorySchema, CreateUpdateCategory
-from app.user import get_user_bearer
+from app.user import get_user_bearer, auth_resp
+from app.utils import error_response
 
 categories_router = APIRouter(
     prefix="/categories", dependencies=[Depends(get_user_bearer)], tags=["Categories"]
 )
 
+not_found_resp = {
+    status.HTTP_404_NOT_FOUND: error_response(
+        "Category with such id does not exist.", ["Such category does not exist"]
+    )
+}
+
+unique_violation_resp = {
+    status.HTTP_409_CONFLICT: error_response(
+        "Category with such name already exists.", ["Such category already exists"]
+    )
+}
+
 
 @categories_router.get(
-    "/", response_model=list[CategorySchema], status_code=status.HTTP_200_OK
+    "/",
+    response_model=list[CategorySchema],
+    status_code=status.HTTP_200_OK,
+    responses=auth_resp,
 )
 async def get_all_categories(conn: Database):
     async with conn.cursor(row_factory=class_row(CategorySchema)) as cur:
@@ -21,7 +37,13 @@ async def get_all_categories(conn: Database):
 
 
 @categories_router.get(
-    "/{category_id}", response_model=CategorySchema, status_code=status.HTTP_200_OK
+    "/{category_id}",
+    response_model=CategorySchema,
+    status_code=status.HTTP_200_OK,
+    responses={
+        **auth_resp,
+        **not_found_resp,
+    },
 )
 async def get_category(category_id: int, conn: Database):
     async with conn.cursor(row_factory=class_row(CategorySchema)) as cur:
@@ -32,14 +54,20 @@ async def get_category(category_id: int, conn: Database):
         if cur.rowcount == 0:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Such Category Does not Exist",
+                detail="Such category does not exist",
             )
         category = await cur.fetchone()
     return category
 
 
 @categories_router.post(
-    "/", response_model=CategorySchema, status_code=status.HTTP_201_CREATED
+    "/",
+    response_model=CategorySchema,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        **auth_resp,
+        **unique_violation_resp,
+    },
 )
 async def create_category(body: CreateUpdateCategory, conn: Database):
     async with conn.cursor(row_factory=class_row(CategorySchema)) as cur:
@@ -51,13 +79,17 @@ async def create_category(body: CreateUpdateCategory, conn: Database):
         except UniqueViolation:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Such Category Already Exists",
+                detail="Such category already exists",
             )
         category = await cur.fetchone()
     return category
 
 
-@categories_router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+@categories_router.delete(
+    "/{category_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={**auth_resp, **not_found_resp},
+)
 async def delete_category(category_id: int, conn: Database):
     async with conn.cursor() as cur:
         await cur.execute(
@@ -66,12 +98,19 @@ async def delete_category(category_id: int, conn: Database):
         if cur.rowcount == 0:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Such Category Does not Exist",
+                detail="Such category does not exist",
             )
 
 
 @categories_router.patch(
-    "/{category_id}", response_model=CategorySchema, status_code=status.HTTP_200_OK
+    "/{category_id}",
+    response_model=CategorySchema,
+    status_code=status.HTTP_200_OK,
+    responses={
+        **auth_resp,
+        **unique_violation_resp,
+        **not_found_resp,
+    },
 )
 async def update_category(category_id: int, body: CreateUpdateCategory, conn: Database):
     async with conn.cursor(row_factory=class_row(CategorySchema)) as cur:
@@ -83,12 +122,12 @@ async def update_category(category_id: int, body: CreateUpdateCategory, conn: Da
         except UniqueViolation:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Such Category Already Exists",
+                detail="Such category already exists",
             )
         if cur.rowcount == 0:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Such Category Does not Exist",
+                detail="Such category does not exist",
             )
         category = await cur.fetchone()
     return category
