@@ -15,8 +15,8 @@ class CreateUserSchema(BaseModel):
 
 
 class UpdateUserSchema(BaseModel):
-    username: Optional[str] = Field(None, min_length=1, max_length=64)
-    password: Optional[str] = Field(None, min_length=8, max_length=64)
+    username: str | None = Field(None, min_length=1, max_length=64)
+    password: str | None = Field(None, min_length=8, max_length=64)
 
 
 class TokenSchema(BaseModel):
@@ -42,7 +42,7 @@ class ProductSchema(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     stock: int = Field(ge=0)
     price: float = Field(ge=0)
-    image: str | None = Field(default=None)
+    image: str | None = None
     categories: list[CategorySchema]
 
 
@@ -54,10 +54,10 @@ class CreateProductSchema(BaseModel):
 
 
 class UpdateProductSchema(BaseModel):
-    name: Optional[str] = Field(default=None, min_length=1, max_length=128)
-    stock: Optional[int] = Field(default=None, ge=0)
-    price: Optional[float] = Field(default=None, ge=0)
-    categories: Optional[list[int]] = None
+    name: str | None = Field(None, min_length=1, max_length=128)
+    stock: int | None = Field(None, ge=0)
+    price: float | None = Field(None, ge=0)
+    categories: list[int] | None = None
 
 
 class EventSchema(BaseModel):
