@@ -17,3 +17,27 @@ def hash_password(password: str, salt: bytes | None = None) -> (bytes, bytes):
         salt = secrets.token_bytes(32)
     digest = pbkdf2_hmac("sha256", password.encode(), salt, 500_000, dklen=256)
     return digest, salt
+
+
+def error_response(description: str, details: list[str]) -> dict:
+    """
+    Generates an OpenAPI response object for an error response caused by HTTPException.
+
+    :param description: A human-readable description of the error.
+    :param details: Literal values that `detail` can take.
+    :return: A dictionary representing the OpenAPI response schema.
+    """
+    return {
+        "description": description,
+        "content": {
+            "application/json": {
+                "schema": {
+                    "type": "object",
+                    "required": ["detail"],
+                    "properties": {
+                        "detail": {"type": "string", "enum": details},
+                    },
+                },
+            },
+        },
+    }
