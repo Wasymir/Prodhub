@@ -91,7 +91,6 @@ class CreateEventSchema(BaseModel):
     )
 
 
-
 class UpdateEventSchema(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=128)
     start: datetime | None = Field(default=None)
