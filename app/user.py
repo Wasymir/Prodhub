@@ -3,7 +3,7 @@ from datetime import timedelta, datetime
 from http import HTTPStatus
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import (
     HTTPBasic,
     HTTPBasicCredentials,
@@ -33,14 +33,14 @@ async def get_user_basic(
         )
         if cur.rowcount == 0:
             raise HTTPException(
-                status_code=HTTPStatus.UNAUTHORIZED,
+                status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid Username or Password",
             )
         user_id, password, salt = (await cur.fetchone())[0]
         digest, _ = hash_password(credentials.password, salt)
         if not secrets.compare_digest(digest, password):
             raise HTTPException(
-                status_code=HTTPStatus.UNAUTHORIZED,
+                status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid Username or Password",
             )
 
@@ -58,7 +58,7 @@ async def login_user(user: GetUserBasic, conn: Database):
         )
         if (await cur.fetchone())[0] > 5:
             raise HTTPException(
-                status_code=HTTPStatus.FORBIDDEN, detail="Token Limit Exceeded"
+                status_code=status.HTTP_403_FORBIDDEN, detail="Token Limit Exceeded"
             )
 
         cur.row_factory = class_row(TokenSchema)
@@ -95,7 +95,7 @@ async def get_user_bearer(
         )
         if cur.rowcount == 0:
             raise HTTPException(
-                status_code=HTTPStatus.UNAUTHORIZED, detail="Invalid Token"
+                status_code=status.HTTP_403_FORBIDDEN, detail="Invalid Token"
             )
         user = await cur.fetchone()
     return user
@@ -104,18 +104,20 @@ async def get_user_bearer(
 GetUserBearer = Annotated[UserWithTokenSchema, Depends(get_user_bearer)]
 
 
-@user_router.get("/", response_model=UserWithTokenSchema, status_code=HTTPStatus.OK)
+@user_router.get(
+    "/", response_model=UserWithTokenSchema, status_code=status.HTTP_200_OK
+)
 async def get_user(user: GetUserBearer):
     return user
 
 
-@user_router.post("/logout", status_code=HTTPStatus.NO_CONTENT)
+@user_router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(user: GetUserBearer, conn: Database):
     async with conn.cursor() as cur:
         await cur.execute("delete from tokens where value = %s", (user.value,))
 
 
-@user_router.post("/logout-all", status_code=HTTPStatus.NO_CONTENT)
+@user_router.post("/logout-all", status_code=status.HTTP_204_NO_CONTENT)
 async def logout_all(user: GetUserBearer, conn: Database):
     async with conn.cursor() as cur:
         await cur.execute("delete from tokens where user_id = %s", (user.user_id,))

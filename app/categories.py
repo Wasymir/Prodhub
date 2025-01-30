@@ -1,6 +1,4 @@
-from http import HTTPStatus
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from psycopg.errors import UniqueViolation
 from psycopg.rows import class_row
 
@@ -14,7 +12,7 @@ categories_router = APIRouter(
 
 
 @categories_router.get(
-    "/", response_model=list[CategorySchema], status_code=HTTPStatus.OK
+    "/", response_model=list[CategorySchema], status_code=status.HTTP_200_OK
 )
 async def get_all_categories(conn: Database):
     async with conn.cursor(row_factory=class_row(CategorySchema)) as cur:
@@ -23,7 +21,7 @@ async def get_all_categories(conn: Database):
 
 
 @categories_router.get(
-    "/{category_id}", response_model=CategorySchema, status_code=HTTPStatus.OK
+    "/{category_id}", response_model=CategorySchema, status_code=status.HTTP_200_OK
 )
 async def get_category(category_id: int, conn: Database):
     async with conn.cursor(row_factory=class_row(CategorySchema)) as cur:
@@ -33,14 +31,15 @@ async def get_category(category_id: int, conn: Database):
         )
         if cur.rowcount == 0:
             raise HTTPException(
-                status_code=HTTPStatus.NOT_FOUND, detail="Such Category Does not Exist"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Such Category Does not Exist",
             )
         category = await cur.fetchone()
     return category
 
 
 @categories_router.post(
-    "/", response_model=CategorySchema, status_code=HTTPStatus.CREATED
+    "/", response_model=CategorySchema, status_code=status.HTTP_201_CREATED
 )
 async def create_category(body: CreateUpdateCategory, conn: Database):
     async with conn.cursor(row_factory=class_row(CategorySchema)) as cur:
@@ -51,13 +50,14 @@ async def create_category(body: CreateUpdateCategory, conn: Database):
             )
         except UniqueViolation:
             raise HTTPException(
-                status_code=HTTPStatus.CONFLICT, detail="Such Category Already Exists"
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Such Category Already Exists",
             )
         category = await cur.fetchone()
     return category
 
 
-@categories_router.delete("/{category_id}", status_code=HTTPStatus.NO_CONTENT)
+@categories_router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_category(category_id: int, conn: Database):
     async with conn.cursor() as cur:
         await cur.execute(
@@ -65,12 +65,13 @@ async def delete_category(category_id: int, conn: Database):
         )
         if cur.rowcount == 0:
             raise HTTPException(
-                status_code=HTTPStatus.NOT_FOUND, detail="Such Category Does not Exist"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Such Category Does not Exist",
             )
 
 
 @categories_router.patch(
-    "/{category_id}", response_model=CategorySchema, status_code=HTTPStatus.OK
+    "/{category_id}", response_model=CategorySchema, status_code=status.HTTP_200_OK
 )
 async def update_category(category_id: int, body: CreateUpdateCategory, conn: Database):
     async with conn.cursor(row_factory=class_row(CategorySchema)) as cur:
@@ -81,11 +82,13 @@ async def update_category(category_id: int, body: CreateUpdateCategory, conn: Da
             )
         except UniqueViolation:
             raise HTTPException(
-                status_code=HTTPStatus.CONFLICT, detail="Such Category Already Exists"
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Such Category Already Exists",
             )
         if cur.rowcount == 0:
             raise HTTPException(
-                status_code=HTTPStatus.NOT_FOUND, detail="Such Category Does not Exist"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Such Category Does not Exist",
             )
         category = await cur.fetchone()
     return category
