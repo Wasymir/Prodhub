@@ -3,7 +3,7 @@ import os
 
 from dotenv import load_dotenv
 
-if os.getenv("NO_ENV_FILE") == "true":
+if os.getenv("NO_ENV_FILE") != "true":
     load_dotenv()
 
 if os.name == "nt":
