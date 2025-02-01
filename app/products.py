@@ -16,7 +16,7 @@ from app.schemas import (
     UpdateProductSchema,
 )
 from app.user import get_user_bearer, auth_resp
-from app.utils import error_response, get_responses
+from app.utils import error_response
 
 products_router = APIRouter(
     prefix="/products", dependencies=[Depends(get_user_bearer)], tags=["Products"]
@@ -39,6 +39,16 @@ invalid_image_resp = {
         "Invalid image data.", ["Unable to determine image format"]
     )
 }
+
+not_found_err = HTTPException(
+    status_code=status.HTTP_404_NOT_FOUND,
+    detail="Such product does not exist",
+)
+
+unique_violation_err = HTTPException(
+    status_code=status.HTTP_409_CONFLICT,
+    detail="Such product already exists",
+)
 
 
 @products_router.get(
@@ -102,12 +112,8 @@ async def get_product(product_id: int, conn: Database):
             (product_id,),
         )
         if cur.rowcount == 0:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Such product does not exist",
-            )
-        product = await cur.fetchone()
-    return product
+            raise not_found_err
+        return await cur.fetchone()
 
 
 @products_router.post(
@@ -144,15 +150,9 @@ async def create_product(body: CreateProductSchema, conn: Database):
             product = ProductSchema(**partial, categories=categories)
 
         except UniqueViolation:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Such product already exists",
-            )
+            raise unique_violation_err
         except IntegrityError:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Such category does not exist",
-            )
+            raise app.categories.not_found_err
 
     return product
 
@@ -169,10 +169,7 @@ async def delete_product(product_id: int, conn: Database):
     async with conn.cursor() as cur:
         await cur.execute("delete from products where product_id = %s", (product_id,))
         if cur.rowcount == 0:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Such product does not exist",
-            )
+            raise not_found_err
     image = Path("static", f"{product_id}.png")
     if image.exists():
         os.remove(image)
@@ -203,16 +200,10 @@ async def update_product(body: UpdateProductSchema, product_id: int, conn: Datab
                 (body.name, body.stock, body.price, product_id),
             )
         except UniqueViolation:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Such product already exists",
-            )
+            raise unique_violation_err
 
         if cur.rowcount == 0:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Such product does not exist",
-            )
+            raise not_found_err
 
         if body.categories is None:
             return await get_product(product_id, conn)
@@ -231,15 +222,9 @@ async def update_product(body: UpdateProductSchema, product_id: int, conn: Datab
         except IntegrityError as e:
             match e.diag.column_name:
                 case "product_id":
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail="Such product does not exist",
-                    )
+                    raise not_found_err
                 case "category_id":
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail="Such category does not exist",
-                    )
+                    raise app.categories.not_found_err
 
     return await get_product(product_id, conn)
 
@@ -264,10 +249,7 @@ async def create_product_image(product_id: int, file: UploadFile, conn: Database
             ),
         )
         if cur.rowcount == 0:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Such product does not exist",
-            )
+            raise not_found_err
         try:
             contests = await file.read()
             image = Image.open(BytesIO(contests))

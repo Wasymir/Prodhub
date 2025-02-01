@@ -8,20 +8,43 @@ from app.database import Database
 from app.schemas import (
     EventSchema,
     EventQuery,
-    ProductSchema,
     CreateEventSchema,
     UpdateEventSchema,
 )
-from app.user import get_user_bearer
+from app.user import get_user_bearer, auth_resp
 from app.utils import error_response
 
 events_router = APIRouter(
     prefix="/events", dependencies=[Depends(get_user_bearer)], tags=["Events"]
 )
 
+not_found_resp = {
+    status.HTTP_404_NOT_FOUND: error_response(
+        "Event with such id does not exist.", ["Event not found"]
+    )
+}
+
+unique_violation_resp = {
+    status.HTTP_409_CONFLICT: error_response(
+        "Event with such name already exists.", ["Such event already exists"]
+    )
+}
+
+not_found_err = HTTPException(
+    status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+)
+
+unique_violation_err = HTTPException(
+    status_code=status.HTTP_409_CONFLICT,
+    detail="Event with such name already exists",
+)
+
 
 @events_router.get(
-    "/", response_model=list[EventSchema], status_code=status.HTTP_200_OK
+    "/",
+    response_model=list[EventSchema],
+    status_code=status.HTTP_200_OK,
+    responses=auth_resp,
 )
 async def get_all_events(data: Annotated[EventQuery, Query()], conn: Database):
     async with conn.cursor(row_factory=class_row(EventSchema)) as cur:
@@ -57,9 +80,8 @@ async def get_all_events(data: Annotated[EventQuery, Query()], conn: Database):
     response_model=EventSchema,
     status_code=status.HTTP_200_OK,
     responses={
-        status.HTTP_404_NOT_FOUND: error_response(
-            "Event with such id does not exist.", ["Event not found"]
-        )
+        **auth_resp,
+        **not_found_resp,
     },
 )
 async def get_event(event_id: int, conn: Database):
@@ -69,10 +91,7 @@ async def get_event(event_id: int, conn: Database):
             (event_id,),
         )
         if cur.rowcount == 0:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
-            )
-
+            raise not_found_err
         return await cur.fetchone()
 
 
@@ -81,9 +100,8 @@ async def get_event(event_id: int, conn: Database):
     response_model=EventSchema,
     status_code=status.HTTP_201_CREATED,
     responses={
-        status.HTTP_409_CONFLICT: error_response(
-            "Event with such name already exists.", ["Such event already exists"]
-        )
+        **auth_resp,
+        **unique_violation_resp,
     },
 )
 async def create_event(body: CreateEventSchema, conn: Database):
@@ -96,9 +114,7 @@ async def create_event(body: CreateEventSchema, conn: Database):
                 (body.name, body.start, body.finish),
             )
         except UniqueViolation:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, detail="Such event already exists"
-            )
+            raise unique_violation_err
 
         return await cur.fetchone()
 
@@ -107,33 +123,22 @@ async def create_event(body: CreateEventSchema, conn: Database):
     "/{event_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     responses={
-        status.HTTP_404_NOT_FOUND: error_response(
-            "Event with such id does not exist.", ["Event not found"]
-        )
+        **auth_resp,
+        **not_found_resp,
     },
 )
 async def delete_event(event_id: int, conn: Database):
     async with conn.cursor() as cur:
         await cur.execute("delete from events where event_id = %s", (event_id,))
         if cur.rowcount == 0:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
-            )
+            raise not_found_err
 
 
 @events_router.patch(
     "/{event_id}",
     response_model=EventSchema,
     status_code=status.HTTP_200_OK,
-    responses={
-        status.HTTP_404_NOT_FOUND: error_response(
-            "Event with such id does not exist.", ["Event not found"]
-        ),
-        status.HTTP_409_CONFLICT: error_response(
-            "Event with such name already exists.",
-            ["Event with such name already exists"],
-        ),
-    },
+    responses={**auth_resp, **not_found_resp, **unique_violation_resp},
 )
 async def update_event(event_id: int, body: UpdateEventSchema, conn: Database):
     async with conn.cursor(row_factory=class_row(EventSchema)) as cur:
@@ -148,13 +153,8 @@ async def update_event(event_id: int, body: UpdateEventSchema, conn: Database):
                 (body.name, body.start, body.finish, event_id),
             )
         except UniqueViolation:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Event with such name already exists",
-            )
+            raise unique_violation_err
         if cur.rowcount == 0:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
-            )
+            raise not_found_err
 
         return await cur.fetchone()

@@ -23,6 +23,16 @@ unique_violation_resp = {
     )
 }
 
+not_found_err = HTTPException(
+    status_code=status.HTTP_404_NOT_FOUND,
+    detail="Such category does not exist",
+)
+
+unique_violation_err = HTTPException(
+    status_code=status.HTTP_409_CONFLICT,
+    detail="Such category already exists",
+)
+
 
 @categories_router.get(
     "/",
@@ -52,12 +62,8 @@ async def get_category(category_id: int, conn: Database):
             (category_id,),
         )
         if cur.rowcount == 0:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Such category does not exist",
-            )
-        category = await cur.fetchone()
-    return category
+            raise not_found_err
+        return await cur.fetchone()
 
 
 @categories_router.post(
@@ -77,12 +83,8 @@ async def create_category(body: CreateUpdateCategory, conn: Database):
                 (body.name,),
             )
         except UniqueViolation:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Such category already exists",
-            )
-        category = await cur.fetchone()
-    return category
+            raise unique_violation_err
+        return await cur.fetchone()
 
 
 @categories_router.delete(
@@ -96,10 +98,7 @@ async def delete_category(category_id: int, conn: Database):
             "delete from categories where category_id = %s", (category_id,)
         )
         if cur.rowcount == 0:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Such category does not exist",
-            )
+            raise not_found_err
 
 
 @categories_router.patch(
@@ -120,14 +119,7 @@ async def update_category(category_id: int, body: CreateUpdateCategory, conn: Da
                 (body.name, category_id),
             )
         except UniqueViolation:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Such category already exists",
-            )
+            raise unique_violation_err
         if cur.rowcount == 0:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Such category does not exist",
-            )
-        category = await cur.fetchone()
-    return category
+            raise not_found_err
+        return await cur.fetchone()
