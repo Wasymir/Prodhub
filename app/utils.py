@@ -43,3 +43,22 @@ def error_response(description: str, details: list[str]) -> dict:
             },
         },
     }
+
+
+def join_error_responses(*responses: list[dict[int, dict]]):
+    """
+    This function joins responses dicts as in response_models in fastapi routers endpoints.
+
+    :param responses: responses dictionaries to be connected
+    """
+    description = ""
+    details = []
+    for val in responses:
+        for resp in val.values():
+            if description:
+                description += " OR. "
+            description += resp["description"]
+            details += resp["content"]["application/json"]["schema"]["properties"][
+                "detail"
+            ]["enum"]
+    return error_response(description, details)
