@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, Literal, Annotated
+from typing import Literal, Annotated
 
 from pydantic import BaseModel, Field, ValidationInfo, AfterValidator
 
@@ -67,11 +67,12 @@ class EventSchema(BaseModel):
     finish: datetime | None = None
 
 
-def check_end_not_before_start(end: datetime, info: ValidationInfo) -> datetime:
+def check_end_not_before_start(finish: datetime, info: ValidationInfo) -> datetime:
     if "start" in info.data:
-        if end and info.data["start"] and end < info.data["start"]:
-            raise ValueError("End time cannot be before start time")
-        return end
+        if finish and info.data["start"] and finish < info.data["start"]:
+            raise ValueError("Finish time cannot be before start time")
+        return finish
+    return finish
 
 
 class EventQuery(BaseModel):
@@ -97,3 +98,51 @@ class UpdateEventSchema(BaseModel):
     finish: Annotated[datetime | None, AfterValidator(check_end_not_before_start)] = (
         None
     )
+
+
+class SaleSchema(BaseModel):
+    sale_id: int
+    product: ProductSchema | None = None
+    amount: int
+    price: float
+
+
+class CreateSaleSchema(BaseModel):
+    product_id: int
+    amount: int
+    price: float | None = None
+
+
+PaymentMethod = Literal["Cash", "Card", "BLIK"]
+
+
+class TransactionSchema(BaseModel):
+    transaction_id: int
+    user: UserSchema
+    event: EventSchema | None = None
+    time: datetime
+    payment_method: PaymentMethod
+    sales: list[SaleSchema]
+
+
+class TransactionQuery(BaseModel):
+    start: datetime | None = None
+    finish: Annotated[datetime | None, AfterValidator(check_end_not_before_start)] = (
+        None
+    )
+    user_id: int | None = None
+    event_id: int | None = None
+    payment_method: PaymentMethod | None = None
+    order_by: Literal["date", "sum"] | None = None
+
+
+class CreateTransactionSchema(BaseModel):
+    event_id: int | None = None
+    payment_method: PaymentMethod
+    sales: list[CreateSaleSchema]
+
+
+class UpdateTransaction(BaseModel):
+    event_id: int | None = None
+    payment_method: PaymentMethod | None = None
+    sales: list[CreateSaleSchema] | None = None

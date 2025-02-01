@@ -10,15 +10,17 @@ from app.categories import categories_router
 from app.database import db_pool
 from app.events import events_router
 from app.products import products_router
+from app.transactions import transactions_router
 from app.user import user_router
 from app.utils import logger
 
 tags_metadata = [
     {"name": "Admin Utils", "description": "Endpoints reserved for admin interface."},
     {"name": "User Utils", "description": "Session management endpoints for users."},
-    {"name": "Categories", "description": "Endpoints for managing categories"},
-    {"name": "Products", "description": "Endpoints for managing Products"},
-    {"name": "Events", "description": "Endpoints for managing events"},
+    {"name": "Categories", "description": "Endpoints for managing categories."},
+    {"name": "Products", "description": "Endpoints for managing products."},
+    {"name": "Events", "description": "Endpoints for managing events."},
+    {"name": "Transactions", "description": "Endpoints for managing transactions."},
 ]
 
 
@@ -47,6 +49,8 @@ app.include_router(categories_router)
 app.include_router(products_router)
 
 app.include_router(events_router)
+
+app.include_router(transactions_router)
 
 app.mount("/static", StaticFiles(directory="static"))
 
