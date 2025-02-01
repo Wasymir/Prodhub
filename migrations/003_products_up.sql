@@ -13,3 +13,9 @@ create table product_categories
     category_id integer references categories on delete cascade,
     primary key (product_id, category_id)
 );
+
+create view categories_by_product as
+select pc.product_id, array_agg(json_build_object('category_id', c.category_id, 'name', c.name)) as categories
+from product_categories pc
+         left join categories c on pc.category_id = c.category_id
+group by pc.product_id;
